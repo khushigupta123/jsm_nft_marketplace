@@ -1,3 +1,4 @@
+/* eslint-disable import/no-extraneous-dependencies */
 const hre = require('hardhat');
 
 async function main() {

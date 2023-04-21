@@ -25,5 +25,6 @@ const NFTCard = ({ nft, onProfilePage }) => {
       </div>
     </Link>
   );
-}
+};
+
 export default NFTCard;
