@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Web3Modal from 'web3modal';
 import { ethers } from 'ethers';
 import axios from 'axios';
@@ -7,24 +7,25 @@ import { create as ipfsHttpClient } from 'ipfs-http-client';
 import { MarketAddress, MarketAddressABI } from './constants';
 
 // const client = ipfsHttpClient('https://ipfs.infura.io:5001/api/v0');
-const projectId = process.env.NEXT_PUBLIC_PROJECT_ID;
-const projectSecret = process.env.NEXT_PUBLIC_API_KEY_SECRET;
-const auth = `Basic ${Buffer.from(`${projectId}:${projectSecret}`).toString('base64')}`;
-
-const client = ipfsHttpClient({
-  host: 'ipfs.infura.io',
-  port: 5001,
-  protocol: 'https',
-  headers: {
-    authorization: auth,
-  },
-});
-
+export const NFTContext = React.createContext();
 const fetchContract = (signerOrProvider) => new ethers.Contract(MarketAddress, MarketAddressABI, signerOrProvider);
 
-export const NFTContext = React.createContext();
+// const projectId = process.env.IPFS_PROJECT_ID;
+// const projectSecret = process.env.API_KEY_SECRET;
+// const auth = `Basic ${Buffer.from(`${projectId}:${projectSecret}`).toString('base64')}`;
+
+// const client = ipfsHttpClient({
+//   host: 'ipfs.infura.io',
+//   port: 5001,
+//   protocol: 'https',
+//   headers: {
+//     authorization: auth,
+//   },
+// });
 
 export const NFTProvider = ({ children }) => {
+  const auth = useRef('');
+  const client = useRef({});
   const [currentAccount, setCurrentAccount] = useState('');
   const [isLoadingNFT, setIsLoadingNFT] = useState(false);
   const nftCurrency = 'ETH';
@@ -41,10 +42,6 @@ export const NFTProvider = ({ children }) => {
     }
   };
 
-  useEffect(() => {
-    checkIfWalletIsConnected();
-  }, []);
-
   const connectWallet = async () => {
     if (!window.ethereum) return alert('Please install MetaMask');
 
@@ -58,8 +55,8 @@ export const NFTProvider = ({ children }) => {
   const uploadToIPFS = async (file) => {
     const subdomain = 'https://gola-nft-marketplace.infura-ipfs.io';
     try {
-      console.log(file);
-      const added = await client.add({ content: file });
+      // console.log(file);
+      const added = await client.current.add({ content: file });
 
       const url = `${subdomain}/ipfs/${added.path}`;
 
@@ -69,22 +66,23 @@ export const NFTProvider = ({ children }) => {
     }
   };
 
-  const createNFT = async (formInput, fileUrl, router) => {
-    const { name, description, price } = formInput;
+  const fetchAuth = async () => {
+    const response = await fetch('/api/secure');
+    const data = await response.json();
+    return data;
+  };
 
-    if (!name || !description || !price || !fileUrl) return;
-
-    const data = JSON.stringify({ name, description, image: fileUrl});
-    const subdomain = 'https://gola-nft-marketplace.infura-ipfs.io';
-    try {
-      console.log(data);
-      const added = await client.add({ content: data });
-      const url = `${subdomain}/ipfs/${added.path}`;
-      await createSale(url, price, false, null);
-      router.push('/');
-    } catch (error) {
-      console.error('Error uploading to file to IPFS. Details: ', error);
-    }
+  const getClient = (author) => {
+    const responseClient = ipfsHttpClient({
+      host: 'ipfs.infura.io',
+      port: 5001,
+      protocol: 'https',
+      apiPath: '/api/v0',
+      headers: {
+        authorization: author,
+      },
+    });
+    return responseClient;
   };
 
   const createSale = async (url, formInputPrice, isReselling, id) => {
@@ -133,6 +131,41 @@ export const NFTProvider = ({ children }) => {
     return items;
   };
 
+  const createNFT = async (formInput, fileUrl, router) => {
+    const { name, description, price } = formInput;
+
+    if (!name || !description || !price || !fileUrl) return;
+
+    const data = JSON.stringify({ name, description, image: fileUrl });
+    const subdomain = 'https://gola-nft-marketplace.infura-ipfs.io';
+    try {
+      // console.log(data);
+      const added = await client.current.add({ content: data });
+      const url = `${subdomain}/ipfs/${added.path}`;
+      await createSale(url, price, false, null);
+      router.push('/');
+    } catch (error) {
+      console.error('Error uploading to file to IPFS. Details: ', error);
+    }
+  };
+
+  const buyNFT = async (nft) => {
+    const web3Modal = new Web3Modal();
+    const connection = await web3Modal.connect();
+    const provider = new ethers.providers.Web3Provider(connection);
+    const signer = provider.getSigner();
+
+    const contract = fetchContract(signer);
+
+    const price = ethers.utils.parseUnits(nft.price.toString(), 'ether');
+
+    const transaction = await contract.createMarketSale(nft.tokenId, { value: price });
+
+    setIsLoadingNFT(true);
+    await transaction.wait();
+    setIsLoadingNFT(false);
+  };
+
   const fetchMyNFTsOrListedNFTs = async (type) => {
     setIsLoadingNFT(false);
 
@@ -167,22 +200,12 @@ export const NFTProvider = ({ children }) => {
     return items;
   };
 
-  const buyNFT = async (nft) => {
-    const web3Modal = new Web3Modal();
-    const connection = await web3Modal.connect();
-    const provider = new ethers.providers.Web3Provider(connection);
-    const signer = provider.getSigner();
-
-    const contract = fetchContract(signer);
-
-    const price = ethers.utils.parseUnits(nft.price.toString(), 'ether');
-
-    const transaction = await contract.createMarketSale(nft.tokenId, { value: price });
-
-    setIsLoadingNFT(true);
-    await transaction.wait();
-    setIsLoadingNFT(false);
-  };
+  useEffect(async () => {
+    checkIfWalletIsConnected();
+    const { data } = await fetchAuth();
+    auth.current = data;
+    client.current = getClient(auth.current);
+  }, []);
 
   return (
     <NFTContext.Provider value={{ nftCurrency, connectWallet, currentAccount, uploadToIPFS, createNFT, fetchNFTs, fetchMyNFTsOrListedNFTs, buyNFT, createSale, isLoadingNFT }}>
