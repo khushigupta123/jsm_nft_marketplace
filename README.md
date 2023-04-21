@@ -4,4 +4,4 @@
 
 NFT Marketplace uses Next.js, Tailwind and popular Web3 concepts and technologies, smart contract development, Solidity, IPFS and more to facilitate trading of Non-Fungible Tokens.  
 
-![NFT Marketplace](./readme_assets/main-page.png)
+![main-page](https://user-images.githubusercontent.com/95741246/233700907-c42f6730-7ab9-4d96-a821-663c85c8d60d.png)
