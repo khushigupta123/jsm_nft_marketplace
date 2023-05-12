@@ -33,6 +33,7 @@ const Footer = () => {
                 btnName="Email me"
                 // btnType="primary"
                 classStyles="rounded-md"
+                emailTo="khushigg451@gmail.com"
               />
             </div>
           </div>
